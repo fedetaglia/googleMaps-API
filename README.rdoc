@@ -1,5 +1,7 @@
 == README
 
+This project helps me to better learn how to use google maps API
+
 This README would normally document whatever steps are necessary to get the
 application up and running.
 
