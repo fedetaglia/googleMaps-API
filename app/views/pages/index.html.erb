@@ -1,0 +1,278 @@
+<h1>here i am .. studying googleMaps API</h1>
+
+
+<div class="row">
+  <div class="col-md-6">
+    <div id="map-canvas"></div>
+    <input id="pac-input" class="controls" type="text" placeholder="Enter a location">
+  </div>
+
+  <div class="col-md-6">
+    <h4>my markers</h4>
+    <ul class="marker-list"> 
+    </ul>
+  </div>
+</div>
+
+ <script type="text/javascript"
+      src="https://maps.googleapis.com/maps/api/js?key=<%= ENV['GOOGLE_API_KEY'] %>&sensor=false">
+      // sensor set if app using geolocator or not
+</script>
+
+<script src="//code.jquery.com/jquery-1.9.1.js"></script>
+<script src="//code.jquery.com/ui/1.10.4/jquery-ui.js"></script>
+
+<script type="text/javascript">
+  var selectedPosition = "";
+  var markers = [];
+  var current_marker = ""
+  
+
+
+  var renderGoogleMaps = function() {
+    
+    var $mapsCanvas = $('#map-canvas')[0];
+    var mapOptions = {
+      // center: new google.maps.LatLng(-34.397, 150.644),
+      center: {lat: -34.397, lng: 150.644},
+      zoom: 8
+    }
+
+    var map = new google.maps.Map($mapsCanvas, mapOptions);
+
+    // adding search
+    var input = $('#pac-input').value()
+    map.controls[google.maps.ControlPosition.TOP_LEFT].push(input);
+    var autocomplete = new google.maps.places.Autocomplete(input);
+    autocomplete.bindTo('bounds', map);
+    
+
+
+
+    var getRoutePath = function(routePoints){
+      var routePath = new google.maps.Polyline({
+        path: routePoints,
+        geodesic: true,
+        strokeColor: '#FF0000',
+        strokeOpacity: 1.0,
+        strokeWeight: 2
+      });
+        return routePath
+    } // close getRoutePath
+    
+
+    var renderRoute = function(){
+      if (!(typeof route === 'undefined')) {
+        route.setMap(null);
+      }
+       var routePoints = []
+       _.each(markers, function(marker){
+        routePoints.push(marker.position)
+       })
+       route = getRoutePath(routePoints);
+       route.setMap(map);
+     }
+
+
+     function createMarker(location,index) {
+      index = typeof index !== 'undefined' ? index : markers.length; 
+      var marker = new google.maps.Marker({
+        object: 'marker',
+        position: location,
+        draggable: true,
+        map: map
+      });
+      if (index == markers.length){
+        markers.push(marker)
+      } else {
+        first_markers = markers.slice(0,index)
+        last_markers = markers.slice(index)
+        first_markers.push(marker)
+        markers = first_markers.concat(last_markers)
+      }
+       google.maps.event.addListener(marker, 'dragend', function(){
+        loadMarkerView();
+        renderRoute();
+      });
+
+      google.maps.event.addListener(marker, 'rightclick', function(){
+        showContextMenu(this.position,this)
+      });
+     }
+
+    function placeMarker(location,index) {
+      createMarker(location,index)
+      renderRoute();
+    }
+
+    function renderAll(){
+      renderMarkers(map);
+      loadMarkerView();
+      renderRoute();
+    }
+
+    // Sets the map on all markers in the array.
+    function setAllMap(map) {
+      for (var i = 0; i < markers.length; i++) {
+        markers[i].setMap(map);
+      }
+    } 
+
+    function renderMarkers(map){
+      for (var i = 0; i < markers.length; i++) {
+        markers[i].setMap(map);
+      }
+    }
+
+    function addMarkerbefore(){
+      current_index = markers.indexOf(current_marker)
+      previous_marker = markers[current_index-1]
+      lat = (current_marker.position.k - previous_marker.position.k )/2 + previous_marker.position.k
+      lng = (current_marker.position.A - previous_marker.position.A )/2 + previous_marker.position.A
+      new_marker = new google.maps.LatLng(lat,lng)
+      createMarker(new_marker,current_index)
+      current_marker = ""
+    }
+
+
+    function showContextMenu(latLng,from) {
+      from = typeof from !== 'undefined' ? from : 'map';
+      var projection;
+      var contextmenuDir;
+      current_marker = from;
+      projection = map.getProjection() ;
+      $('.contextmenu').remove();
+      contextmenuDir = document.createElement("div");
+      contextmenuDir.className  = 'contextmenu';
+      if (from.object === 'marker') {
+       contextmenuDir.innerHTML = '<a id="menu_remove_marker"><div class="context">Remove marker<\/div><\/a>'
+       if (markers.indexOf(from) > 0) {
+        contextmenuDir.innerHTML = contextmenuDir.innerHTML + '<a id="menu_add_marker_before"><div class="context">Add a marker before<\/div><\/a>'
+       }
+      } else {
+       contextmenuDir.innerHTML = '<a id="menu1"><div class="context">Add Marker<\/div><\/a>'
+                               + ''; 
+      }
+      $(map.getDiv()).append(contextmenuDir);
+      setMenuXY(latLng);
+      contextmenuDir.style.visibility = "visible";
+
+    }
+
+
+    function setMenuXY(latLng){
+      var mapWidth = $('#map_canvas').width();
+      var mapHeight = $('#map_canvas').height();
+      var menuWidth = $('.contextmenu').width();
+      var menuHeight = $('.contextmenu').height();
+      var clickedPosition = adjustXY(latLng);
+      var x = clickedPosition.x ;
+      var y = clickedPosition.y ;
+
+      if((mapWidth - x ) < menuWidth)//if to close to the map border, decrease x position
+          x = x - menuWidth;
+      if((mapHeight - y ) < menuHeight)//if to close to the map border, decrease y position
+         y = y - menuHeight;
+
+      $('.contextmenu').css('left',x  );
+      $('.contextmenu').css('top',y );
+    };
+
+    function adjustXY(latLng){
+      var scale = Math.pow(2, map.getZoom());
+      var nw = new google.maps.LatLng(
+          map.getBounds().getNorthEast().lat(),
+          map.getBounds().getSouthWest().lng()
+      );
+      var worldCoordinateNW = map.getProjection().fromLatLngToPoint(nw);
+      var worldCoordinate = map.getProjection().fromLatLngToPoint(latLng);
+      var caurrentLatLngOffset = new google.maps.Point(
+          Math.floor((worldCoordinate.x - worldCoordinateNW.x) * scale),
+          Math.floor((worldCoordinate.y - worldCoordinateNW.y) * scale)
+      );
+      return caurrentLatLngOffset;
+   }
+
+     var loadMarkerView = function() {
+
+        $(".marker-list").empty();
+        _.each(markers, function(marker){
+          var lat = marker.position.k // north-south
+          var lng = marker.position.A // east-west
+          var html = "<li id='marker_"+ markers.indexOf(marker)+"'><h5><strong>Position" + markers.indexOf(marker)+ "</strong></h5><p>lat: "+lat+" lng: "+lng+"</p></li>"
+          $('.marker-list').append(html)
+        })
+
+        $('.marker-list').sortable();
+        $('.marker-list').disableSelection();
+
+        $('.marker-list').on("sortupdate", function(){
+          ids = []
+          newMarkers = []
+          dom_array = _.each(($('.marker-list').children()), function(li){li.id})
+
+          _.each(dom_array, function(marker){
+              ids.push(parseInt((marker.id).replace("marker_","")))
+          }); // each dom array
+
+          _.each(ids, function(pos){
+            newMarkers.push(markers[pos])
+          })
+          
+          $('.marker-list').off('sortupdate')
+          markers = newMarkers;
+          loadMarkerView();
+          renderRoute();
+        }); // sortupdate function
+
+      } // load marker view
+
+
+
+
+    google.maps.event.addListener(map,'rightclick', function(e){
+      selectedPosition = e.latLng
+      showContextMenu(e.latLng)  
+    })
+
+    google.maps.event.addListener(map,'click', function(e){
+     $('.contextmenu').remove();
+    })
+
+
+    
+    $(map.getDiv()).on('click','#menu1',function(){
+      placeMarker(selectedPosition);
+      selectedPosition = "";
+      loadMarkerView()
+      $('.contextmenu').remove();
+      current_marker = ""
+    })
+
+    $(map.getDiv()).on('click','#menu_remove_marker',function(){
+      var index = markers.indexOf(current_marker)
+      markers[index].setMap(null);
+      if (index > -1) {
+       markers.splice(index, 1);
+      }
+      $('.contextmenu').remove();
+      
+      renderAll();
+      current_marker = ""
+    })
+
+    $(map.getDiv()).on("click",'#menu_add_marker_before',function(){
+      addMarkerbefore()
+      selectedPosition = "";
+      loadMarkerView()
+      $('.contextmenu').remove();
+      current_marker = ""
+    })
+}
+
+ google.maps.event.addDomListener(window, 'load', renderGoogleMaps);
+
+
+
+
+</script>
